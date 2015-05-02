@@ -4,9 +4,10 @@ package serial
 
 import (
 	"os"
-	"syscall"
 	"time"
 	"unsafe"
+
+	sycall "golang.org/x/sys/unix"
 )
 
 func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err error) {
