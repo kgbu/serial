@@ -59,6 +59,14 @@ import (
 	"time"
 )
 
+type ParityType int
+
+const (
+	ParityNone = 0
+	ParityEven = 1
+	ParityOdd  = 2
+)
+
 // Config contains the information needed to open a serial port.
 //
 // Currently few options are implemented, but more may be added in the
@@ -80,11 +88,11 @@ type Config struct {
 	ReadTimeout time.Duration // Total timeout
 
 	// Size     int // 0 get translated to 8
-	// Parity   SomeNewTypeToGetCorrectDefaultOf_None
+	Parity ParityType
 	// StopBits SomeNewTypeToGetCorrectDefaultOf_1
 
-	// RTSFlowControl bool
-	// DTRFlowControl bool
+	RTSFlowControl bool
+	DTRFlowControl bool
 	// XONFlowControl bool
 
 	// CRLFTranslate bool
