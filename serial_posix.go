@@ -18,7 +18,19 @@ import (
 )
 
 func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err error) {
-	f, err := os.OpenFile(name, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
+	c := NewConfig()
+	c.Name = name
+	c.Baud = baud
+	c.ReadTimeout = readTimeout
+	p, err = newPort(c)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func newPort(c *Config)(p *Port, err error) {
+	f, err := os.OpenFile(c.Name, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
 	if err != nil {
 		return
 	}
@@ -36,7 +48,7 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 		return nil, err
 	}
 	var speed C.speed_t
-	switch baud {
+	switch c.Baud {
 	case 115200:
 		speed = C.B115200
 	case 57600:
@@ -53,7 +65,7 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 		speed = C.B2400
 	default:
 		f.Close()
-		return nil, fmt.Errorf("Unknown baud rate %v", baud)
+		return nil, fmt.Errorf("Unknown baud rate %v", c.Baud)
 	}
 
 	_, err = C.cfsetispeed(&st, speed)
@@ -83,7 +95,7 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 	*	http://man7.org/linux/man-pages/man3/termios.3.html
 	* - Supports blocking read and read with timeout operations
 	 */
-	vmin, vtime := posixTimeoutValues(readTimeout)
+	vmin, vtime := posixTimeoutValues(c.ReadTimeout)
 	st.c_cc[C.VMIN] = C.cc_t(vmin)
 	st.c_cc[C.VTIME] = C.cc_t(vtime)
 
