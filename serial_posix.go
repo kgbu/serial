@@ -29,7 +29,7 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 	return p, nil
 }
 
-func newPort(cfg *Config)(p *Port, err error) {
+func newPort(cfg *Config) (p *Port, err error) {
 	f, err := os.OpenFile(cfg.Name, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
 	if err != nil {
 		return
@@ -84,7 +84,7 @@ func newPort(cfg *Config)(p *Port, err error) {
 
 	// Select local mode, turn off parity, set to 8 bits
 	st.c_cflag &= ^C.tcflag_t(C.CSIZE | C.PARENB)
-	st.c_cflag |= (C.CLOCAL | C.CREAD )
+	st.c_cflag |= (C.CLOCAL | C.CREAD)
 
 	// set character bit size
 	switch cfg.Size {
@@ -102,7 +102,7 @@ func newPort(cfg *Config)(p *Port, err error) {
 
 	// set parity bits
 	switch cfg.Parity {
-	case ParityNone: 
+	case ParityNone:
 		st.c_iflag |= C.IGNPAR
 	case ParityEven:
 		st.c_iflag |= C.INPCK
