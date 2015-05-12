@@ -18,7 +18,19 @@ import (
 )
 
 func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err error) {
-	f, err := os.OpenFile(name, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
+	cfg := NewConfig()
+	cfg.Name = name
+	cfg.Baud = baud
+	cfg.ReadTimeout = readTimeout
+	p, err = newPort(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func newPort(cfg *Config) (p *Port, err error) {
+	f, err := os.OpenFile(cfg.Name, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
 	if err != nil {
 		return
 	}
@@ -36,7 +48,7 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 		return nil, err
 	}
 	var speed C.speed_t
-	switch baud {
+	switch cfg.Baud {
 	case 115200:
 		speed = C.B115200
 	case 57600:
@@ -53,7 +65,7 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 		speed = C.B2400
 	default:
 		f.Close()
-		return nil, fmt.Errorf("Unknown baud rate %v", baud)
+		return nil, fmt.Errorf("Unknown baud rate %v", cfg.Baud)
 	}
 
 	_, err = C.cfsetispeed(&st, speed)
@@ -72,7 +84,38 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 
 	// Select local mode, turn off parity, set to 8 bits
 	st.c_cflag &= ^C.tcflag_t(C.CSIZE | C.PARENB)
-	st.c_cflag |= (C.CLOCAL | C.CREAD | C.CS8)
+	st.c_cflag |= (C.CLOCAL | C.CREAD)
+
+	// set character bit size
+	switch cfg.Size {
+	case 5:
+		st.c_cflag |= C.CS5
+	case 6:
+		st.c_cflag |= C.CS6
+	case 7:
+		st.c_cflag |= C.CS7
+	case 8:
+		st.c_cflag |= C.CS8
+	default:
+		st.c_cflag |= C.CS8
+	}
+
+	// set parity bits
+	switch cfg.Parity {
+	case ParityNone:
+		st.c_iflag |= C.IGNPAR
+	case ParityEven:
+		st.c_iflag |= C.INPCK
+		st.c_cflag |= C.PARENB
+	case ParityOdd:
+		st.c_iflag |= C.INPCK
+		st.c_cflag |= C.PARENB
+		st.c_cflag |= C.PARODD
+	default:
+		st.c_iflag |= C.IGNPAR
+	}
+
+	// no way to set hardware flow control in POSIX
 
 	// Select raw mode
 	st.c_lflag &= ^C.tcflag_t(C.ICANON | C.ECHO | C.ECHOE | C.ISIG)
@@ -83,7 +126,7 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 	*	http://man7.org/linux/man-pages/man3/termios.3.html
 	* - Supports blocking read and read with timeout operations
 	 */
-	vmin, vtime := posixTimeoutValues(readTimeout)
+	vmin, vtime := posixTimeoutValues(cfg.ReadTimeout)
 	st.c_cc[C.VMIN] = C.cc_t(vmin)
 	st.c_cc[C.VTIME] = C.cc_t(vtime)
 

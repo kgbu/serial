@@ -38,11 +38,24 @@ type structTimeouts struct {
 }
 
 func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err error) {
-	if len(name) > 0 && name[0] != '\\' {
-		name = "\\\\.\\" + name
+	cfg := NewConfig()
+	cfg.Name = name
+	cfg.Baud = baud
+	cfg.ReadTimeout = readTimeout
+
+	p, err = newPort(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func newPort(cfg *Config) (p *Port, err error) {
+	if len(cfg.Name) > 0 && cfg.Name[0] != '\\' {
+		cfg.Name = "\\\\.\\" + cfg.Name
 	}
 
-	h, err := syscall.CreateFile(syscall.StringToUTF16Ptr(name),
+	h, err := syscall.CreateFile(syscall.StringToUTF16Ptr(cfg.Name),
 		syscall.GENERIC_READ|syscall.GENERIC_WRITE,
 		0,
 		nil,
@@ -52,20 +65,20 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 	if err != nil {
 		return nil, err
 	}
-	f := os.NewFile(uintptr(h), name)
+	f := os.NewFile(uintptr(h), cfg.Name)
 	defer func() {
 		if err != nil {
 			f.Close()
 		}
 	}()
 
-	if err = setCommState(h, baud); err != nil {
+	if err = setCommState(h, cfg.Baud); err != nil {
 		return
 	}
 	if err = setupComm(h, 64, 64); err != nil {
 		return
 	}
-	if err = setCommTimeouts(h, readTimeout); err != nil {
+	if err = setCommTimeouts(h, cfg.ReadTimeout); err != nil {
 		return
 	}
 	if err = setCommMask(h); err != nil {

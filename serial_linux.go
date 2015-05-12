@@ -11,6 +11,18 @@ import (
 )
 
 func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err error) {
+	c := NewConfig()
+	c.Name = name
+	c.Baud = baud
+	c.ReadTimeout = readTimeout
+	p, err := newPort(c)
+	if err != nil {
+		return nil.err
+	}
+	return p, nil
+}
+
+func newPort(c *Config) (p *Port, err error) {
 	var bauds = map[int]uint32{
 		50:      syscall.B50,
 		75:      syscall.B75,
@@ -44,13 +56,13 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 		4000000: syscall.B4000000,
 	}
 
-	rate := bauds[baud]
+	rate := bauds[c.Baud]
 
 	if rate == 0 {
 		return
 	}
 
-	f, err := os.OpenFile(name, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
+	f, err := os.OpenFile(c.Name, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
 	if err != nil {
 		return nil, err
 	}
@@ -62,13 +74,49 @@ func openPort(name string, baud int, readTimeout time.Duration) (p *Port, err er
 	}()
 
 	fd := f.Fd()
-	vmin, vtime := posixTimeoutValues(readTimeout)
+	vmin, vtime := posixTimeoutValues(c.ReadTimeout)
 	t := syscall.Termios{
-		Iflag:  syscall.IGNPAR,
-		Cflag:  syscall.CS8 | syscall.CREAD | syscall.CLOCAL | rate,
+		Iflag:  0,
+		Cflag:  syscall.CREAD | syscall.CLOCAL | rate,
 		Cc:     [32]uint8{syscall.VMIN: vmin, syscall.VTIME: vtime},
 		Ispeed: rate,
 		Ospeed: rate,
+	}
+	// set character bit size
+	switch c.Size {
+	case 5:
+		t.Cflag |= syscall.CS5
+	case 6:
+		t.Cflag |= syscall.CS6
+	case 7:
+		t.Cflag |= syscall.CS7
+	case 8:
+		t.Cflag |= syscall.CS8
+	default:
+		t.Cflag |= syscall.CS8
+	}
+
+	// set parity bits
+	switch c.Parity {
+	case ParityNone: // do nothing
+		t.Iflag |= syscall.IGNPAR
+	case ParityEven:
+		t.Iflag |= syscall.INPCK
+		t.Cflag |= syscall.PARENB
+	case ParityOdd:
+		t.Iflag |= syscall.INPCK
+		t.Cflag |= syscall.PARENB
+		t.Cflag |= syscall.PARODD
+	default:
+		t.Iflag |= syscall.IGNPAR
+	}
+
+	// set hardware flow control
+	switch c.RTSFlowControl || c.DTRFlowControl {
+	case true:
+		t.Cflag |= syscall.CRTSCTS
+	default:
+		// do nothing
 	}
 
 	if _, _, errno := syscall.Syscall6(
